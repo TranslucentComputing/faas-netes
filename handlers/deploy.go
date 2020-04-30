@@ -123,6 +123,8 @@ func makeDeploymentSpec(request types.FunctionDeployment, existingSecrets map[st
 
 	nodeSelector := createSelector(request.Constraints)
 
+	toleration := createSelectorToleration(request.Constraints)
+
 	resources, resourceErr := createResources(request)
 
 	if resourceErr != nil {
@@ -212,6 +214,7 @@ func makeDeploymentSpec(request types.FunctionDeployment, existingSecrets map[st
 					ServiceAccountName: serviceAccount,
 					RestartPolicy:      corev1.RestartPolicyAlways,
 					DNSPolicy:          corev1.DNSClusterFirst,
+					Tolerations:        toleration,
 				},
 			},
 		},
@@ -307,8 +310,31 @@ func createSelector(constraints []string) map[string]string {
 		for _, constraint := range constraints {
 			parts := strings.Split(constraint, "=")
 
-			if len(parts) == 2 {
-				selector[parts[0]] = parts[1]
+			if len(parts) == 2 && strings.HasPrefix(parts[0], "NC:") {
+				var label = strings.TrimPrefix(parts[0], "NC:")
+				selector[label] = parts[1]
+			}
+		}
+	}
+
+	return selector
+}
+
+func createSelectorToleration(constraints []string) []apiv1.Toleration {
+	selector := make([]apiv1.Toleration, 0)
+
+	if len(constraints) > 0 {
+		for _, constraint := range constraints {
+			parts := strings.Split(constraint, "=")
+
+			if len(parts) == 2 && strings.HasPrefix(parts[0], "TC:") {
+				var label = strings.TrimPrefix(parts[0], "TC:")
+				selector = []apiv1.Toleration{{
+					Key:      label,
+					Operator: apiv1.TolerationOpEqual,
+					Value:    parts[1],
+					Effect:   apiv1.TaintEffectNoSchedule,
+				}}
 			}
 		}
 	}
